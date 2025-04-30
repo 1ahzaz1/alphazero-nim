@@ -6,7 +6,7 @@ from torch.optim.lr_scheduler import MultiStepLR
 from mcts import MCTS
 import ray
 import copy
-
+import os
 
 @ray.remote
 class Simulation:
@@ -85,6 +85,10 @@ class Trainer:
                     train_examples.extend(exp)
             shuffle(train_examples)
             self.train(train_examples)
+            if i % 50 == 0 or i == self.args['numIters']:
+                if not os.path.exists(self.args['model_dir']):
+                    os.makedirs(self.args['model_dir'])
+                self.model.save_checkpoint(folder=self.args['model_dir'], filename=f"checkpoint_iter_{i}.pt")
 
     def train(self, examples):
         for _ in range(self.args['epochs']):
@@ -104,6 +108,8 @@ class Trainer:
                 loss_pi = self.loss_pi(target_pis, out_pi)
                 loss_v = self.loss_v(target_vs, out_v)
                 total_loss = loss_pi + loss_v
+                print(f"Iter {self.epoch_counter+1}, Batch {batch_idx+1} | Loss π: {loss_pi.item():.4f} | Loss V: {loss_v.item():.4f} | Total: {total_loss.item():.4f}")
+
                 
 
 
