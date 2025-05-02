@@ -11,7 +11,7 @@ from main import set_seed
 include_history = True
 board = [2 for _ in range(10)]
 num_frames = 2
-num_simulation = 100
+num_simulation = 10000
 model_base_dir = './models'
 alpha = 0.35
 # -------------------------------------
@@ -22,7 +22,7 @@ def win_lose_position(board):
     xor = 0
     for c in board:
         xor = c ^ xor
-    return 'WIN' if xor == 0 else 'LOSE'
+    return 'OPPONENT WIN (bad move)' if xor == 0 else ' OPPONENT LOSE (good move)'
 
 # Get the model folder name
 model_folder = f"{len(board)}_{include_history}_{alpha}"
@@ -33,8 +33,8 @@ checkpoints = [f for f in os.listdir(model_dir) if re.match(r'checkpoint_iter_\d
 latest_checkpoint = max(checkpoints, key=lambda x: int(re.search(r'\d+', x).group()))
 model_path = os.path.join(model_dir, latest_checkpoint)
 
-print(f"🧠 Using model: {model_path}")
-print("📦 History enabled" if include_history else "📦 History disabled")
+print(f"Using model: {model_path}")
+print("History enabled" if include_history else "History disabled")
 
 # Init game/model - IMPORTANT: Use hidden_size=64 which matches the saved model
 game = Nim(board, include_history, num_frames=num_frames)
@@ -59,7 +59,7 @@ print(f'\n🟨 root: {board} ({win_lose_position(board)}) | V: {round(value, 2)}
 total_visits = sum(child.visit_count for child in root.children.values())
 sorted_children = sorted(root.children.items(), key=lambda x: x[1].visit_count, reverse=True)
 
-print("\n🔍 Top moves:")
+print("\nTop moves:")
 for action, child in sorted_children:
     if child.state is not None:
         child_board = child.state[len(board)*num_frames:] if include_history else child.state
