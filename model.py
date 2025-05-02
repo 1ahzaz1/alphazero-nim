@@ -6,7 +6,7 @@ import os
 
 
 class Nim_Model(nn.Module):
-    def __init__(self, action_size, input_size=3, hidden_size=128, num_lstm_layers=1, num_head_layers=1):
+    def __init__(self, action_size, input_size=10, hidden_size=128, num_lstm_layers=1, num_head_layers=1):
         super(Nim_Model, self).__init__()
         self.action_size = action_size
         self.hidden_size = hidden_size

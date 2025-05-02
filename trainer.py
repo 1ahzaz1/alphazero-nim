@@ -140,7 +140,6 @@ if __name__ == "__main__":
     print("🧪 Running debug mode for Trainer...")
 
     args = {
-        'n_piles': 3,
         'batch_size': 4,
         'epochs': 1,
         'lr': 0.01,
@@ -149,7 +148,7 @@ if __name__ == "__main__":
         'scheduler_gamma': 0.1,
         'num_lstm_layers': 1,
         'num_head_layers': 1,
-        'hidden_size': 16
+        'hidden_size': 128
     }
 
     game = Nim(init_board=[1, 3, 5], include_history=True, num_frames=2)

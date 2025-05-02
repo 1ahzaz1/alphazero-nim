@@ -19,16 +19,16 @@ num_workers = 8  # CHANGED FROM 20 TO 8, FOR MY LAPTOP
 args = {
     'init_board': [2 for _ in range(10)],
     'include_history': True,
-    'num_simulations': 75,  # CHANGED FROM 20 TO 25
+    'num_simulations': 200,  # CHANGED FROM 20 TO 25
     'batch_size': 128,
     'numEps': num_workers * 10,  # CHANGED FROM 10 TO 4, FOR MY LAPTOP
-    'numIters': 100,  # CHANGED FROM 3000 TO 1000, FOR MY LAPTOP
-    'epochs': 2,
+    'numIters': 500,  # CHANGED FROM 3000 TO 1000, FOR MY LAPTOP
+    'epochs': 4, # CHANGED FROM 2 TO 4
     'lr': 0.02,
     'milestones': [200, 600],
     'scheduler_gamma': 0.1,
     'weight_decay': 1e-4,
-    'hidden_size': 64,
+    'hidden_size': 128,
     'num_lstm_layers': 1,
     'num_head_layers': 1,
     'alpha': 0.35,
