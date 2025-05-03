@@ -31,8 +31,8 @@ args = {
     'hidden_size': 128,
     'num_lstm_layers': 1,
     'num_head_layers': 1,
-    'alpha': 0.35,
-    'epsilon': 0.25,
+    'alpha': 0.8,     # INCREASE FROM 0.35 TO 0.8 FOR MORE EXPLORATION
+    'epsilon': 0.5,   # INCREASE FROM 0.25 TO 0.5 FOR MORE EXPLORATION
 }
 
 args['model_dir'] = f"./models/{len(args['init_board'])}_{args['include_history']}_{args['alpha']}"

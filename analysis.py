@@ -11,9 +11,10 @@ from main import set_seed
 include_history = True
 board = [2 for _ in range(10)]
 num_frames = 2
-num_simulation = 10000
+num_simulation = 1000  # Reduced from 10000 to get more balanced results
 model_base_dir = './models'
-alpha = 0.35
+alpha = 0.8  # Match the new training value
+temperature = 0.5  # Add temperature for root action selection
 # -------------------------------------
 
 set_seed(30)
@@ -55,11 +56,21 @@ root = mcts.run(state, game.to_play(), is_train=False)
 _, value = model.predict(root.state)
 print(f'\n🟨 root: {board} ({win_lose_position(board)}) | V: {round(value, 2)} | WL: {round((0.5 + root.value()/2) * 100, 2)}%')
 
-# Print children
+# Print children and select action with temperature
 total_visits = sum(child.visit_count for child in root.children.values())
 sorted_children = sorted(root.children.items(), key=lambda x: x[1].visit_count, reverse=True)
 
-print("\nTop moves:")
+# Get action probabilities based on temperature
+visit_counts = np.array([child.visit_count for child in root.children.values()])
+actions = list(root.children.keys())
+if temperature == 0:
+    action_probs = np.zeros_like(visit_counts)
+    action_probs[np.argmax(visit_counts)] = 1.0
+else:
+    visit_count_distribution = visit_counts ** (1 / temperature)
+    action_probs = visit_count_distribution / sum(visit_count_distribution)
+
+print(f"\nTop moves (using temperature={temperature}):")
 for action, child in sorted_children:
     if child.state is not None:
         child_board = child.state[len(board)*num_frames:] if include_history else child.state

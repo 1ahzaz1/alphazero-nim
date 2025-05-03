@@ -33,12 +33,12 @@ class Simulation:
                 train_examples.append((state, action_probs, self.game.to_play()))
 
                 # Temperature scheduling
-                if n_moves <= 3:
+                if n_moves <= 5:
                     temp = 2.0
-                elif 3 < n_moves < 5:
+                elif 5 < n_moves < 10:
                     temp = 1.0
                 else:
-                    temp = 0
+                    temp = 0.5
 
                 action = root.select_action(temperature=temp)
                 next_state, reward, done = self.game.step(action)
