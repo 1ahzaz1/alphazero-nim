@@ -12,10 +12,12 @@ def parse_args():
                         help="Alpha value used in training")
     parser.add_argument("--checkpoint", type=int, default=500,
                         help="Maximum checkpoint to plot up to")
-    parser.add_argument("--output", type=str, default=None,
-                        help="Output filename (default: loss_curve_[history]_[alpha].png)")
+    parser.add_argument("--output_prefix", type=str, default="loss_comparison",
+                        help="Prefix for output filenames")
     parser.add_argument("--compare", action="store_true",
                         help="Plot both history and no-history models on same graph")
+    parser.add_argument("--combined", action="store_true",
+                        help="Create a single plot with all losses instead of separate plots")
     return parser.parse_args()
 
 def extract_losses_from_log(logfile):
@@ -50,75 +52,168 @@ def smooth_curve(points, factor=0.8):
             smoothed_points.append(point)
     return smoothed_points
 
-def generate_loss_plot(history_enabled, history_disabled=None, alpha=1.0, max_iter=500, output=None):
-    """Generate a plot of training losses"""
+def generate_comparison_plots(history_data, no_history_data, alpha=1.0, max_iter=500, output_prefix="loss_comparison", combined=False):
+    """Generate policy and value loss comparison plots"""
+    if history_data and no_history_data:
+        hist_iterations, hist_policy_losses, hist_value_losses = history_data
+        no_hist_iterations, no_hist_policy_losses, no_hist_value_losses = no_history_data
+        
+        # Smooth the curves
+        hist_policy_smooth = smooth_curve(hist_policy_losses)
+        hist_value_smooth = smooth_curve(hist_value_losses)
+        no_hist_policy_smooth = smooth_curve(no_hist_policy_losses)
+        no_hist_value_smooth = smooth_curve(no_hist_value_losses)
+        
+        # Calculate averages of last 50 iterations
+        hist_policy_avg = np.mean(hist_policy_losses[-50:])
+        hist_value_avg = np.mean(hist_value_losses[-50:])
+        no_hist_policy_avg = np.mean(no_hist_policy_losses[-50:])
+        no_hist_value_avg = np.mean(no_hist_value_losses[-50:])
+        
+        if combined:
+            # Create a single plot with all losses
+            plt.figure(figsize=(12, 8))
+            
+            # Policy losses
+            plt.plot(hist_iterations, hist_policy_smooth, 'b-', linewidth=2.5, label='Policy Loss (History)')
+            plt.plot(no_hist_iterations, no_hist_policy_smooth, 'g-', linewidth=2.5, label='Policy Loss (No History)')
+            
+            # Value losses
+            plt.plot(hist_iterations, hist_value_smooth, 'r-', linewidth=2.5, label='Value Loss (History)')
+            plt.plot(no_hist_iterations, no_hist_value_smooth, 'm-', linewidth=2.5, label='Value Loss (No History)')
+            
+            # Averages
+            plt.axhline(y=hist_policy_avg, color='b', linestyle='--', 
+                       label=f'Avg Policy (History): {hist_policy_avg:.4f}')
+            plt.axhline(y=hist_value_avg, color='r', linestyle='--',
+                       label=f'Avg Value (History): {hist_value_avg:.4f}')
+            plt.axhline(y=no_hist_policy_avg, color='g', linestyle='--',
+                       label=f'Avg Policy (No Hist): {no_hist_policy_avg:.4f}')
+            plt.axhline(y=no_hist_value_avg, color='m', linestyle='--',
+                       label=f'Avg Value (No Hist): {no_hist_value_avg:.4f}')
+            
+            # Labels and styling
+            plt.xlabel('Training Iteration', fontsize=12)
+            plt.ylabel('Loss', fontsize=12)
+            plt.title(f'Training Losses - History vs No History (α={alpha})', fontsize=14)
+            plt.grid(True, alpha=0.3)
+            plt.legend(loc='upper right', fontsize=10)
+            plt.ylim(bottom=0)
+            
+            # Save the plot
+            filename = f"{output_prefix}_all_losses_alpha_{alpha}.png"
+            plt.savefig(filename, dpi=300, bbox_inches='tight')
+            print(f"Combined plot saved to {filename}")
+            plt.close()
+        
+        else:  # Create separate plots for policy and value losses
+            # Policy Loss plot
+            plt.figure(figsize=(10, 6))
+            plt.plot(hist_iterations, hist_policy_losses, 'b-', alpha=0.3)
+            plt.plot(no_hist_iterations, no_hist_policy_losses, 'g-', alpha=0.3)
+            plt.plot(hist_iterations, hist_policy_smooth, 'b-', linewidth=2.5, label='History Enabled')
+            plt.plot(no_hist_iterations, no_hist_policy_smooth, 'g-', linewidth=2.5, label='History Disabled')
+            
+            plt.axhline(y=hist_policy_avg, color='b', linestyle='--', 
+                       label=f'History Avg: {hist_policy_avg:.4f}')
+            plt.axhline(y=no_hist_policy_avg, color='g', linestyle='--',
+                       label=f'No History Avg: {no_hist_policy_avg:.4f}')
+            
+            # Calculate and display the difference
+            diff = no_hist_policy_avg - hist_policy_avg
+            plt.axhspan(hist_policy_avg, no_hist_policy_avg, color='lightblue', alpha=0.2)
+            
+            # Labels and styling
+            plt.xlabel('Training Iteration', fontsize=12)
+            plt.ylabel('Policy Loss', fontsize=12)
+            plt.title(f'Policy Loss - History vs No History (α={alpha})\nDifference: {diff:.4f}', fontsize=14)
+            plt.grid(True, alpha=0.3)
+            plt.legend(loc='upper right', fontsize=10)
+            plt.ylim(bottom=0)
+            
+            # Save the plot
+            filename = f"{output_prefix}_policy_loss_alpha_{alpha}.png"
+            plt.savefig(filename, dpi=300, bbox_inches='tight')
+            print(f"Policy loss comparison saved to {filename}")
+            plt.close()
+            
+            # Value Loss plot
+            plt.figure(figsize=(10, 6))
+            plt.plot(hist_iterations, hist_value_losses, 'r-', alpha=0.3)
+            plt.plot(no_hist_iterations, no_hist_value_losses, 'm-', alpha=0.3)
+            plt.plot(hist_iterations, hist_value_smooth, 'r-', linewidth=2.5, label='History Enabled')
+            plt.plot(no_hist_iterations, no_hist_value_smooth, 'm-', linewidth=2.5, label='History Disabled')
+            
+            plt.axhline(y=hist_value_avg, color='r', linestyle='--', 
+                       label=f'History Avg: {hist_value_avg:.4f}')
+            plt.axhline(y=no_hist_value_avg, color='m', linestyle='--',
+                       label=f'No History Avg: {no_hist_value_avg:.4f}')
+            
+            # Calculate and display the difference
+            v_diff = no_hist_value_avg - hist_value_avg
+            plt.axhspan(hist_value_avg, no_hist_value_avg, color='mistyrose', alpha=0.2)
+            
+            # Labels and styling
+            plt.xlabel('Training Iteration', fontsize=12)
+            plt.ylabel('Value Loss', fontsize=12)
+            plt.title(f'Value Loss - History vs No History (α={alpha})\nDifference: {v_diff:.4f}', fontsize=14)
+            plt.grid(True, alpha=0.3)
+            plt.legend(loc='upper right', fontsize=10)
+            plt.ylim(bottom=0)
+            
+            # Save the plot
+            filename = f"{output_prefix}_value_loss_alpha_{alpha}.png"
+            plt.savefig(filename, dpi=300, bbox_inches='tight')
+            print(f"Value loss comparison saved to {filename}")
+            plt.close()
+    else:
+        print("Missing data for either history or no-history model.")
+
+def generate_single_model_plot(model_data, is_history, alpha=1.0, max_iter=500, output_prefix="loss"):
+    """Generate a plot for a single model (either history or no-history)"""
+    if not model_data:
+        print("No data available for the model.")
+        return
+    
+    iterations, policy_losses, value_losses = model_data
+    
+    # Smooth the curves
+    policy_smooth = smooth_curve(policy_losses)
+    value_smooth = smooth_curve(value_losses)
+    
+    # Calculate averages
+    policy_avg = np.mean(policy_losses[-50:])
+    value_avg = np.mean(value_losses[-50:])
+    
+    # Create the plot
     plt.figure(figsize=(10, 6))
     
-    # Plot history-enabled model if provided
-    if history_enabled:
-        iterations, policy_losses, value_losses = history_enabled
-        plt.plot(iterations, policy_losses, 'b-', alpha=0.3, label='Policy Loss (History)')
-        plt.plot(iterations, value_losses, 'r-', alpha=0.3, label='Value Loss (History)')
-        
-        # Add smoothed curves
-        smoothed_policy = smooth_curve(policy_losses)
-        smoothed_value = smooth_curve(value_losses)
-        plt.plot(iterations, smoothed_policy, 'b-', linewidth=2, label='Policy Loss (History, smoothed)')
-        plt.plot(iterations, smoothed_value, 'r-', linewidth=2, label='Value Loss (History, smoothed)')
-        
-        # Calculate average of last 50 iterations
-        avg_policy = np.mean(policy_losses[-50:])
-        avg_value = np.mean(value_losses[-50:])
-        plt.axhline(y=avg_policy, color='b', linestyle='--', 
-                   label=f'Avg Policy Loss: {avg_policy:.4f}')
-        plt.axhline(y=avg_value, color='r', linestyle='--',
-                   label=f'Avg Value Loss: {avg_value:.4f}')
+    # Plot original and smoothed data
+    plt.plot(iterations, policy_losses, 'b-', alpha=0.3, label='Policy Loss (raw)')
+    plt.plot(iterations, value_losses, 'r-', alpha=0.3, label='Value Loss (raw)')
+    plt.plot(iterations, policy_smooth, 'b-', linewidth=2, label='Policy Loss (smoothed)')
+    plt.plot(iterations, value_smooth, 'r-', linewidth=2, label='Value Loss (smoothed)')
     
-    # Plot history-disabled model if provided (for comparison)
-    if history_disabled:
-        iterations_no, policy_losses_no, value_losses_no = history_disabled
-        plt.plot(iterations_no, policy_losses_no, 'g-', alpha=0.3, label='Policy Loss (No History)')
-        plt.plot(iterations_no, value_losses_no, 'm-', alpha=0.3, label='Value Loss (No History)')
-        
-        # Add smoothed curves
-        smoothed_policy_no = smooth_curve(policy_losses_no)
-        smoothed_value_no = smooth_curve(value_losses_no)
-        plt.plot(iterations_no, smoothed_policy_no, 'g-', linewidth=2, 
-                label='Policy Loss (No History, smoothed)')
-        plt.plot(iterations_no, smoothed_value_no, 'm-', linewidth=2,
-                label='Value Loss (No History, smoothed)')
-        
-        # Calculate average of last 50 iterations
-        avg_policy_no = np.mean(policy_losses_no[-50:])
-        avg_value_no = np.mean(value_losses_no[-50:])
-        plt.axhline(y=avg_policy_no, color='g', linestyle='--',
-                   label=f'Avg Policy Loss (No Hist): {avg_policy_no:.4f}')
-        plt.axhline(y=avg_value_no, color='m', linestyle='--',
-                   label=f'Avg Value Loss (No Hist): {avg_value_no:.4f}')
+    # Add average lines
+    plt.axhline(y=policy_avg, color='b', linestyle='--', 
+               label=f'Avg Policy Loss: {policy_avg:.4f}')
+    plt.axhline(y=value_avg, color='r', linestyle='--',
+               label=f'Avg Value Loss: {value_avg:.4f}')
     
-    # Set up plot details
-    plt.xlabel('Training Iteration')
-    plt.ylabel('Loss')
-    plt.title(f'Training Losses (alpha={alpha})')
+    # Labels and styling
+    model_type = "History Enabled" if is_history else "History Disabled" 
+    plt.xlabel('Training Iteration', fontsize=12)
+    plt.ylabel('Loss', fontsize=12)
+    plt.title(f'Training Losses - {model_type} (α={alpha})', fontsize=14)
     plt.grid(True, alpha=0.3)
-    plt.legend(loc='upper right')
-    
-    # Set reasonable y-axis limits
+    plt.legend(loc='upper right', fontsize=10)
     plt.ylim(bottom=0)
     
-    # Save or show the plot
-    if output:
-        plt.savefig(output, dpi=300, bbox_inches='tight')
-        print(f"Plot saved to {output}")
-    else:
-        if history_disabled:
-            default_filename = f"loss_curve_comparison_alpha_{alpha}.png"
-        else:
-            history_tag = "history" if history_enabled else "no_history"
-            default_filename = f"loss_curve_{history_tag}_alpha_{alpha}.png"
-        plt.savefig(default_filename, dpi=300, bbox_inches='tight')
-        print(f"Plot saved to {default_filename}")
-    
+    # Save the plot
+    history_tag = "history" if is_history else "no_history"
+    filename = f"{output_prefix}_{history_tag}_alpha_{alpha}.png"
+    plt.savefig(filename, dpi=300, bbox_inches='tight')
+    print(f"Plot saved to {filename}")
     plt.close()
 
 def find_log_file(history, alpha):
@@ -128,6 +223,7 @@ def find_log_file(history, alpha):
         f"training_log_{5}_{bool(history)}_{alpha}.txt",  # Standard format with board size 5
         f"training_{bool(history)}_{alpha}.log",
         f"output_{bool(history)}_{alpha}.log",
+        f"history_logs.txt" if history else "no_history_logs.txt",
         "training.log"
     ]
     
@@ -171,13 +267,13 @@ def main():
     else:
         no_history_data = None
     
-    # Generate the plot
-    if args.compare:
-        generate_loss_plot(history_data, no_history_data, args.alpha, args.checkpoint, args.output)
+    # Generate the appropriate plots
+    if args.compare and history_data and no_history_data:
+        generate_comparison_plots(history_data, no_history_data, args.alpha, args.checkpoint, args.output_prefix, args.combined)
     elif args.history == 1 and history_data:
-        generate_loss_plot(history_data, None, args.alpha, args.checkpoint, args.output)
+        generate_single_model_plot(history_data, True, args.alpha, args.checkpoint, args.output_prefix)
     elif args.history == 0 and no_history_data:
-        generate_loss_plot(None, no_history_data, args.alpha, args.checkpoint, args.output)
+        generate_single_model_plot(no_history_data, False, args.alpha, args.checkpoint, args.output_prefix)
     else:
         print("No data available to plot.")
 
