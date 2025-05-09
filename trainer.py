@@ -1,5 +1,5 @@
 import numpy as np
-from random import shuffle
+from random import shuffle, choice
 import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import MultiStepLR
@@ -13,13 +13,21 @@ class Simulation:
     def __init__(self, game, args):
         self.game = copy.deepcopy(game)
         self.args = args
+        self.alternative_boards = args.get('alternative_boards', None)
+        self.random_starts = args.get('random_starts', False)
 
     def execute_episode(self, model):
         self.model = model
         mcts = MCTS(self.game, self.model, self.args)
         train_examples = []
         
-        state = self.game.reset()
+        # Use random starting positions if enabled
+        if self.random_starts and self.alternative_boards:
+            random_board = choice(self.alternative_boards)
+            state = self.game.reset(board=random_board)
+        else:
+            state = self.game.reset()
+            
         done = False
         n_moves = 0
         with torch.no_grad():
@@ -32,14 +40,16 @@ class Simulation:
 
                 train_examples.append((state, action_probs, self.game.to_play()))
 
-                # Temperature scheduling
+                # Improved temperature scheduling - maintain higher temperatures throughout
+                min_temp = self.args.get('min_temperature', 0.5)  # Never go below this
+                
                 if n_moves <= 5:
-                    temp = 2.0
-                elif 5 < n_moves < 10:
-                    temp = 1.0
+                    temp = 1.5  # Very exploratory early game
+                elif 5 < n_moves < 15:
+                    temp = 1.0  # Still exploratory mid-game
                 else:
-                    temp = 0.5
-
+                    temp = min_temp  # Minimum temperature even in late game
+                
                 action = root.select_action(temperature=temp)
                 next_state, reward, done = self.game.step(action)
                 state = next_state
@@ -75,7 +85,7 @@ class Trainer:
 
     def learn(self):
         for i in range(1, self.args['numIters'] + 1):
-            print(f'{i}/{self.args["numIters"]}')
+            # Generate self-play examples
             train_examples = []
             self.model.to(torch.device('cpu'))
             self.model.eval()
@@ -84,13 +94,23 @@ class Trainer:
                 for exp in examples:
                     train_examples.extend(exp)
             shuffle(train_examples)
-            self.train(train_examples)
+            
+            # Train and collect metrics
+            avg_pi_loss, avg_v_loss = self.train(train_examples)
+            
+            # Print training progress
+            print(f'Iter {i}/{self.args["numIters"]} | Policy Loss: {avg_pi_loss:.4f} | Value Loss: {avg_v_loss:.4f}')
+            
             if i % 50 == 0 or i == self.args['numIters']:
                 if not os.path.exists(self.args['model_dir']):
                     os.makedirs(self.args['model_dir'])
                 self.model.save_checkpoint(folder=self.args['model_dir'], filename=f"checkpoint_iter_{i}.pt")
 
     def train(self, examples):
+        total_pi_loss = 0
+        total_v_loss = 0
+        batch_count = 0
+        
         for _ in range(self.args['epochs']):
             batch_idx = 0
             while batch_idx < len(examples) // self.args['batch_size']:
@@ -108,10 +128,11 @@ class Trainer:
                 loss_pi = self.loss_pi(target_pis, out_pi)
                 loss_v = self.loss_v(target_vs, out_v)
                 total_loss = loss_pi + loss_v
-                print(f"Iter {self.epoch_counter+1}, Batch {batch_idx+1} | Loss π: {loss_pi.item():.4f} | Loss V: {loss_v.item():.4f} | Total: {total_loss.item():.4f}")
-
                 
-
+                # Track losses for averaging
+                total_pi_loss += loss_pi.item()
+                total_v_loss += loss_v.item()
+                batch_count += 1
 
                 self.optimizer.zero_grad()
                 total_loss.backward()
@@ -122,6 +143,11 @@ class Trainer:
 
             self.epoch_counter += 1
             self.scheduler.step()
+        
+        # Return average losses
+        avg_pi_loss = total_pi_loss / batch_count if batch_count > 0 else 0
+        avg_v_loss = total_v_loss / batch_count if batch_count > 0 else 0
+        return avg_pi_loss, avg_v_loss
 
     def loss_pi(self, targets, outputs):
         loss = - (targets * torch.log(outputs + 1e-8)).sum(dim=1)

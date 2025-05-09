@@ -2,11 +2,12 @@ import numpy as np
 
 
 class Nim:
-    def __init__(self, init_board=[2, 2, 2, 2, 2], include_history=True, num_frames=2):
+    def __init__(self, init_board=[2, 2, 2, 2, 2], include_history=True, num_frames=2, alternative_boards=None):
         super(Nim, self).__init__()
         self.init_board = init_board
         self.n_piles = len(init_board)
-        self.board = [2 * i + 1 for i in range(self.n_piles)]
+        self.board = init_board.copy()
+        self.alternative_boards = alternative_boards
 
         self.include_history = include_history
         self.num_frames = num_frames
@@ -32,10 +33,19 @@ class Nim:
     def to_play(self):
         return self.player
 
-    def reset(self):
-        self.board = self.init_board.copy()
+    def reset(self, board=None):
+        # Use provided board, or default to init_board
+        if board is not None:
+            if len(board) != self.n_piles:
+                raise ValueError(f"Board must have {self.n_piles} piles, got {len(board)}")
+            self.board = board.copy()
+        else:
+            self.board = self.init_board.copy()
+            
         if self.include_history:
             self.history = []
+            
+        self.player = 1  # Reset player to 1
         return self.state()
 
     def state(self):
@@ -104,11 +114,11 @@ class Nim:
         return np.random.choice(actions)
 
 
-# 🧪 Debug block for standalone testing
+# Debug block for standalone testing
 if __name__ == "__main__":
     print("Multi-frame Nim Debug Mode\n")
 
-    # Change this to test different configurations
+    # Testing different configurations
     game = Nim(init_board=[1, 3, 5], include_history=True, num_frames=2)
 
     state = game.reset()

@@ -9,12 +9,13 @@ from main import set_seed
 
 # --- CONFIG (edit this part only) ---
 include_history = True
-board = [2 for _ in range(10)]
+board = [1, 3, 5, 7, 9]  # WINNING POSITION (nim-sum = 1) with 5 piles
 num_frames = 2
-num_simulation = 1000  # Reduced from 10000 to get more balanced results
+num_simulation = 100  # REDUCED: Use fewer simulations to highlight network differences
 model_base_dir = './models'
-alpha = 0.8  # Match the new training value
-temperature = 0.5  # Add temperature for root action selection
+training_alpha = 0.8  # Alpha value used during TRAINING (for directory path)
+analysis_alpha = 0.8  # Alpha value to use during ANALYSIS (for exploration)
+temperature = 1.0  # Higher temperature to see more move diversity
 # -------------------------------------
 
 set_seed(30)
@@ -23,10 +24,11 @@ def win_lose_position(board):
     xor = 0
     for c in board:
         xor = c ^ xor
-    return 'OPPONENT WIN (bad move)' if xor == 0 else ' OPPONENT LOSE (good move)'
+    # From the perspective of the player who just made the move:
+    return 'GOOD MOVE (opponent in losing position)' if xor == 0 else 'BAD MOVE (opponent in winning position)'
 
-# Get the model folder name
-model_folder = f"{len(board)}_{include_history}_{alpha}"
+# Get the model folder name - use training_alpha for the directory
+model_folder = f"{len(board)}_{include_history}_{training_alpha}"
 model_dir = os.path.join(model_base_dir, model_folder)
 
 # Find latest checkpoint
@@ -37,20 +39,26 @@ model_path = os.path.join(model_dir, latest_checkpoint)
 print(f"Using model: {model_path}")
 print("History enabled" if include_history else "History disabled")
 
-# Init game/model - IMPORTANT: Use hidden_size=64 which matches the saved model
+# Init game/model - IMPORTANT: Must match the training architecture EXACTLY
 game = Nim(board, include_history, num_frames=num_frames)
 model = Nim_Model(action_size=game.action_size,
-                  input_size=10,     # Explicitly set input_size to 10
-                  hidden_size=128,   # Change to 128 to match newly trained model
+                  input_size=5,  # Must match number of heaps (5)
+                  hidden_size=128,
                   num_lstm_layers=1,
-                  num_head_layers=1)
+                  num_head_layers=2)  # MUST match training (now 2 layers)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model.load_state_dict(torch.load(model_path, map_location=device))
 
-# Run MCTS on board state
-mcts = MCTS(game, model, {'num_simulations': num_simulation, 'alpha': alpha})
+# Run MCTS on board state with limited search to emphasize network quality
+mcts = MCTS(game, model, {
+    'num_simulations': num_simulation, 
+    'alpha': analysis_alpha,
+    'epsilon': 0.5  # Add exploration but not too much
+})
 state = game.state()
-root = mcts.run(state, game.to_play(), is_train=False)
+
+# Use training mode to include some exploration
+root = mcts.run(state, game.to_play(), is_train=True)
 
 # Display root stats
 _, value = model.predict(root.state)
